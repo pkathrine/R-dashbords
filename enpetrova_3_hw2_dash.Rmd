@@ -1,0 +1,108 @@
+---
+title: "HW2: Анализ проектов в Kickstarter"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(readr)
+kickstarter = read_csv("~/shared/minor2_2020/1-Intro/hw2/kickstarter.csv")
+dollar_goal=read_csv("~/shared/minor2_2020/1-Intro/hw2/usd_goals.csv")
+  
+library(rpart)
+library(rpart.plot)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(MASS)
+library(coin)
+library(lubridate)
+library(ggplot2)
+
+kickstarter = right_join(kickstarter, dollar_goal)
+kickstarter$state = as.factor(kickstarter$state)
+kickstarter$main_category = as.factor(kickstarter$main_category)
+kickstarter$country = as.factor(kickstarter$country)
+kickstarter$launched = as.Date(kickstarter$launched)
+
+kickstarter = kickstarter %>% mutate(duration = deadline - launched) 
+kickstarter$duration = as.numeric(kickstarter$duration)
+kickstarter = kickstarter %>%  mutate(sum_day = usd_goal_real/duration)
+
+
+```
+
+Column {data-width=450}
+-----------------------------------------------------------------------
+
+### Влияние категории на успешность проекта
+
+```{r}
+category_sucs = kickstarter %>% dplyr::select(main_category, usd_goal_real, state)
+category_sucs = category_sucs %>% group_by(main_category, state) %>% summarise(number=n(), median_goal=median(usd_goal_real))
+sucfl_cat = category_sucs %>% group_by(main_category) %>% mutate(cat_n = sum(number)) %>% filter(state == 'successful') 
+
+options(scipen=999)
+ggplot() +
+  geom_histogram(data = sucfl_cat, aes(x = reorder(main_category, number/cat_n), y=number/cat_n), stat = "identity", ) +
+  ylab("Доля успешных проектов") + 
+  xlab("Категории деятельности") + 
+  ggtitle("Доля успешных проектов в каждой категории") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  geom_hline(aes(yintercept = median(sucfl_cat$number/sucfl_cat$cat_n)), linetype="dashed", color="#8B0000", size=1)
+```
+
+
+### Влияние страны деятельности на успех проекта
+
+```{r}
+country_cat_sucs = kickstarter %>% dplyr::select(country, main_category, usd_goal_real, state)
+country_sucs = country_cat_sucs %>% group_by(country, state) %>% summarise(number=n()) %>% mutate(country_n = sum(number)) %>% filter(state=="successful")
+
+ggplot() +
+  geom_histogram(data = country_sucs, aes(x = reorder(country, number/country_n), y=number/country_n, fill=state), stat = "identity", ) +
+  ylab("Доли и мединная доля") + 
+  xlab("Страны") + 
+  ggtitle("Доли успешных проектов в каждой стране") + 
+  scale_fill_discrete(name = "Успех") +
+  geom_hline(aes(yintercept = median(country_sucs$number/country_sucs$country_n)), linetype="dashed", color="#8B0000", size=1)
+ 
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Дерево для анализа проектов
+
+```{r}
+set.seed(147)
+kick_train = kickstarter %>% sample_frac(.8)
+# создаем тестовый набор данных
+# через анти-джойн, чтобы убрать все наблюдения, попавшие в обучающую выборку
+kick_test = anti_join(kickstarter, kick_train, by = 'id') %>% dplyr::select(-id)
+kick_train = kick_train %>% dplyr::select(-id)
+tree1.regr = rpart(state ~ main_category + country + usd_goal_real + sum_day + duration, method = "class", data = kick_train, control = rpart.control(cp = 0.0001))
+
+tree2.regr = prune(tree1.regr, cp = 0.00088429)
+prp(tree2.regr, type=0, box.palette = "auto", extra = 1, left = TRUE)
+```
+
+### Точность дерева для тренировочной и тестовой выборок
+
+```{r}
+pred1 = predict(tree2.regr, type="class", data = kick_train)
+t = table(pred1, kick_train$state)
+acc1 = round((t[1,1] + t[2,2])*100/sum(t), digits=1)
+
+pred2 = predict(tree2.regr, kick_test, type="class")
+tt = table(pred2, kick_test$state)
+acc2 = round((tt[1,1] + tt[2,2])*100/sum(tt), digits=1)
+
+valueBox(paste(acc1, "%  vs  ", acc2, "%"), icon="fas fa-table")
+```
+
+
