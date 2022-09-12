@@ -1,0 +1,150 @@
+---
+title: "Анализ стартапов"
+output: 
+  flexdashboard::flex_dashboard:
+     orientation: rows
+     vertical_layout: fill
+     theme: yeti
+---
+
+
+```{r, echo=F}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(rpart)
+library(rpart.plot)
+library(flexdashboard)
+library(stringr)
+kickstarter = read_csv("~/shared/minor2_2019/data/kickstarter.csv")
+
+
+kickstarter$exchange_rate <- ifelse( kickstarter$currency =="AUD",
+0.68766,
+ifelse(kickstarter$currency =="CAD",
+0.75912,
+ifelse(kickstarter$currency =="CHF",
+1.0160,
+ifelse(kickstarter$currency =="DKK",
+0.14877,
+ifelse(kickstarter$currency =="EUR",
+1.1118,
+ifelse(kickstarter$currency =="GBP",
+1.3325,
+ifelse(kickstarter$currency =="HKD",
+0.12819,
+ifelse(kickstarter$currency =="MXN",
+0.05258,
+ifelse (kickstarter$currency =="NOK",
+0.11066,
+ifelse(kickstarter$currency =="NZD",
+0.65997,
+ifelse(kickstarter$currency =="SEK",
+0.10643,
+ifelse(kickstarter$currency =="SGD",
+0.73900,
+1 ))))))))))))
+
+kickstarter$goal = kickstarter$goal*kickstarter$exchange_rate
+
+kickstarter$pledged = kickstarter$pledged*kickstarter$exchange_rate
+
+kickstarter$usd_pledged = kickstarter$usd_pledged*kickstarter$exchange_rate
+
+options(scipen=999)
+```
+
+
+```{r, echo=F}
+kickstarter <- kickstarter %>% mutate(surplus = pledged - goal)
+kickstarterP <- kickstarter %>% filter(surplus > 0)
+kickstarter1 <- kickstarter %>% group_by(category) %>% summarise(sum = sum(surplus), count = n(), average = sum/count, median = median(surplus))
+kickstarter2 <- kickstarter %>% group_by(main_category) %>% summarise(sum = sum(surplus), count = n(), average = sum/count, median = median(surplus))
+```
+
+
+```{r, echo=F}
+# "зерно" для генератора случайных чисел
+set.seed(1234) 
+
+# Возьмем 80% как обучающие
+kickstarter_train = kickstarter %>% dplyr::sample_frac(.8)
+
+# создаем тестовый набор данных
+# через анти-джойн, чтобы убрать все наблюдения, попавшие в обучающую выборку
+kickstarter_test = dplyr::anti_join(kickstarter, kickstarter_train, by = 'id') %>% dplyr::select(-id)
+
+kickstarter_train = kickstarter_train %>% dplyr::select(-id)
+```
+
+Row
+-----------------------------------------------
+
+### Точность обучающей выборки
+```{r}
+kickstarter_train$Prediction = ifelse(kickstarter_train$backers > 50 | kickstarter_train$main_category %in% c("Games", "Comics") 
+                                      & kickstarter_train$goal > 1000000,
+                                      "good", "bad")
+t= table (kickstarter_train$state, kickstarter_train$Prediction)
+valueBox(value = round((t[1,1]+t[2,2])/sum(t), digits = 5), icon="fa fa-calculator")
+```
+
+### Точность тестовой выборки
+```{r}
+kickstarter_test$Prediction = ifelse(kickstarter_test$backers > 50 | kickstarter_test$main_category %in% c("Games", "Comics")
+                                     & kickstarter_test$goal > 1000000,
+                                     "good", "bad")
+tt = table(kickstarter_test$state, kickstarter_test$Prediction)
+valueBox(value = round((tt[1,1]+tt[2,2])/sum(tt), digits = 5),icon="fa fa-calculator") 
+```
+
+
+Row
+-----------------------------------------------------------------------
+
+###
+```{r}
+tree1 <- rpart(state ~ backers + main_category + goal, method = "class", data = kickstarter_train)
+
+rpart.plot(tree1, box.palette = "RdYlGn", shadow.col="gray", nn=TRUE, extra = 4)
+
+title("Дерево решений, предсказывающее статус проекта\n\n")
+
+
+```
+
+### 
+```{r}
+kickstarter1F <- kickstarter1 %>% top_n(median, n = 10)
+ggplot() + 
+  geom_histogram(data=kickstarter1F, mapping=aes(x=category, y=median, color=category), stat = "identity")+  
+  ggtitle("Топ 10 категорий по медиане") + 
+  theme_dark()+
+  ylab("Медина")+
+  xlab("")+
+  scale_color_discrete(name = "Категории")+
+  theme(panel.background = element_rect(fill = "white"),
+        plot.title = element_text(lineheight=.9, face="bold", colour="black", size=15), 
+        legend.text = element_text(colour = "black", size=12), 
+        legend.title = element_text(colour="black", size=13), 
+        axis.text.x = element_text(angle=30, color="black", vjust = 0.5,size=11), 
+        axis.text.y = element_text(color="black",size=11), 
+        axis.title = element_text(colour="black", size=12),
+        plot.background = element_rect(fill="white"), 
+        legend.background = element_rect(fill="white"))
+```
+
+Row
+-----------------------------------------------------------------------
+
+### Существует ли взаимосвязсь между целью и статусом проекта?
+```{r}
+valueBox("Да", color= "aqua", icon = "fa fa-check") 
+```
+
+```{r, echo = F, include = F}
+t.test(goal~state, data = kickstarter)
+```
+
+
+
