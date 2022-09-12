@@ -1,0 +1,60 @@
+---
+title: "HW Shiny Interface"
+author: "DS Minor"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Задание
+
+Вам даны данные про оценивание Teaching Assistant на некоторых курсах
+
+```{r}
+data = read.csv("C:/Users/pkath/Downloads/TA.csv")
+```
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+
+ggplot(data = inner_join(data, input, by = Instuctor) + geom_histogram(aes(x = Score), stat="count") +
+  xlab("Score") +
+  ylab("count")
+```
+
+   1. isNative = Whether of not the TA is a native English speaker
+   2. Instructor = Course instructor (categorical, 25 categories)
+   3. Course (categorical, 26 categories)
+   4. Season = Summer or regular semester
+   5. Size = Class size (numerical)
+   6. Score = TA estimate 1=Low, 2=Medium, 3=High
+   
+В задании вам нужно повторить интерфейс согласно вашему варианту. 
+
+*Как узнать свой вариант?* Запустите следующий код, подставив свой логин в функцию `getVariant()`
+
+```{r}
+source("~/shared/minor2_2020/4-Project/hw-shiny/getV.R")
+getVariant(login = "enpetrova_3")
+```
+
+В файле `~/shared/minor2_2020/4-Project/hw-shiny/shinyTaskVariants.pdf` представлены варианты, каждый на отдельной странице. 
+
+* повторить нужно именно интерфейс (кнопки, меню и т.д.); график, таблицу вы вставляете любые, не обязательно делать так, чтобы они как-то реагировали на ввод, т.е. вставляете любой график, который вы хотите построить по данным
+* приложение при первом входе должно выглядеть именно так, как представлено на скриншоте -- те же выбранные значения по умолчанию, те же заголовки, те же границы. Единственное, что может отличаться -- графики, таблицы и текст в разделе info (там, где эти жэлементы есть)
+* обратите внимание на пояснения в файле со скриншотами
+
+
+
+## Как сдать
+
+* В степик, модуль ДЗ Shiny
+* Скачать архив приложения (выбираете папку с приложением и выбираете More -> Export, скачается архив)
+* Дедлайн 17.06 23:59 (если вы уезжаете на военные сборы, то нужно загрузить до 13.06)
+
+
