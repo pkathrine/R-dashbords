@@ -1,0 +1,114 @@
+---
+title: "HW1: Обзор деятельности авиалиний и аэропортов"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+
+library(flexdashboard)
+library(dplyr)
+library(ggplot2)
+library(R3PO)
+library(readr)
+library(stringr)
+library(lubridate)
+
+airline = get_hw1_airline_df()
+airport = get_hw1_airport_df()
+seat = get_hw1_seat_df()
+lounge = get_hw1_lounge_df()
+
+#ВОПРОС 3
+
+task31=lounge %>% select(lounge_name, airport, wifi_connectivity_rating)
+task32=airport %>% select(airport_name, wifi_connectivity_rating)
+task32$airport_name=task32$airport_name %>% str_replace_all("-", " ") %>% str_to_title()
+
+task32=task32 %>% rename(airport=airport_name, wifi_airport=wifi_connectivity_rating) %>% na.omit() %>% group_by(airport) %>% summarise(airport_mean_rate=mean(wifi_airport))
+ 
+task31$lounge_name=task31$lounge_name %>% str_to_title() %>% str_remove_all("Lounge Review|Lounge Customer Review|A/B")%>% str_replace_all("First & Business Class", "F&BC") %>% str_replace_all("Business Class", "BC") %>% str_replace_all("First Class", "FC") %>% str_replace_all("\\(Alitalia\\)" , "\"Alitalia\"") %>% str_replace_all("\"Alitalia\"BC", "\"Alitalia\" BC")       
+
+task31=task31 %>% rename(wifi_lounge=wifi_connectivity_rating) %>% na.omit() %>% group_by(lounge_name, airport) %>% summarise(lounge_mean_rate=mean(wifi_lounge))
+
+task3=inner_join(task31, task32, by="airport") 
+
+task3$airport=task3$airport %>% str_remove_all("Airport")
+
+task3=task3 %>% filter(lounge_mean_rate>airport_mean_rate) %>% mutate(difference=lounge_mean_rate-airport_mean_rate) %>% arrange(-difference) %>% group_by(airport)
+
+#ВОПРОС 1
+task1 = airline %>% select(overall_rating, author_country)
+
+task1 = task1 %>% group_by(author_country) %>% summarise(mean_rate=mean(overall_rating)) 
+task1 = na.omit(task1)
+task1 = task1 %>% arrange(desc(mean_rate))
+task1$mean_rate=round(task1$mean_rate, 1)
+
+
+
+#ВОПРОС 2
+task2 = airline %>% select(content, cabin_flown, overall_rating) 
+task2$content=str_to_lower(task2$content)
+
+task2 = task2 %>% mutate(negative=str_detect(task2$content, "not good|bad|awful")) %>% group_by(cabin_flown, negative)%>% na.omit() %>% summarise(n=n(),mr=mean(overall_rating)) 
+
+task21= task2 %>% filter(negative==TRUE) %>% select(-negative)
+task22= task2 %>% filter(negative==FALSE) %>% select(-negative)
+names(task21)[names(task21) == 'n'] <- 'neg' 
+names(task22)[names(task22) == 'n'] <- 'pos'
+
+task2=full_join(task21, task22, "cabin_flown")
+task2[is.na(task2)] <- 0
+
+task2= task2 %>% mutate(sum=neg+pos, share_neg=neg/sum) 
+task2$share_neg=round(task2$share_neg, 2)
+
+```
+
+Column {data-width=450}
+-----------------------------------------------------------------------
+### Лаунж зоны, у которых оценка качества wi-fi в средем выше, чем у их аэропортов по увеличению разницы
+
+```{r}
+# самый важный график или таблица
+ggplot(data = task3) + 
+        geom_histogram(stat = "identity", aes(x=reorder(lounge_name, difference), y=difference, fill=airport)) +
+        coord_flip()+
+        xlab("Лаунж зоны") +
+        scale_fill_discrete(name = "Аэропорт")
+```
+
+### У которых разница средней оценки качества вайфая выше, чем у аэропорта
+
+```{r}
+valueBox(paste(length(unique(task3$lounge_name)), "лаунж зоны"), icon = "fas fa-bed")
+```
+
+
+Column {data-width=450}
+-----------------------------------------------------------------------
+
+### Самая высокая средняя оценка перелета и её страна
+
+```{r}
+text=top_n(task1, n=3)
+p=text$mean_rate
+highest_country=text$author_country
+valueBox(paste(p[1], "/10 от", highest_country[1]), icon = "far fa-smile") 
+```
+
+### Использование негативных слов в отзывах в зависимости от класса
+
+```{r}
+# график или таблица
+
+ggplot(data=task2, aes(x=cabin_flown, y=share_neg, fill=mr.x)) + 
+        geom_bar(stat = "identity", position=position_dodge()) +
+        xlab("Класс") +
+        ylab("Часть отзывов с негативными словами") +
+        scale_fill_continuous(name = "Средняя оценка", type = "viridis") 
+```
+
